@@ -16,19 +16,19 @@ TimeDetect 是一个无第三方依赖的 macOS 菜单栏与桌面悬浮小挂�
 需要 macOS 和 Apple Swift 工具链：
 
 ```sh
-cd /Users/salophen/其他/TimeDetect
+cd /Users/TimeDetect
 ./Scripts/build.sh
 open TimeDetect.app
 ```
 
-构建后会在项目根目录生成 `/Users/salophen/其他/TimeDetect/TimeDetect.app`。可以直接在 Finder 中双击它，无需打开终端。
+构建后会在项目根目录生成 `/Users/TimeDetect/TimeDetect.app`。可以直接在 Finder 中双击它，无需打开终端。
 
 App 是纯菜单栏应用，不进入 Dock。双击后会立即显示一个简洁的菜单栏运行图标和右上角 `240 × 240` 桌面悬浮挂件；菜单栏不显示名字或时间。点击图标可以打开中尺寸详情面板，右键可以快速开关挂件或退出。如果运行期间隐藏了挂件，再次双击 `TimeDetect.app` 会重新显示挂件，不会启动第二个进程。
 
 ## 测试
 
 ```sh
-cd /Users/salophen/其他/TimeDetect
+cd /Users/TimeDetect
 ./Scripts/test.sh
 ```
 
