@@ -11,6 +11,8 @@ struct SmallPhaseCard: View {
     let snapshot: PhaseSnapshot
     /// true 时时钟由系统 Text(style:) 驱动（Widget 省电模式）。
     var usesSystemTimer: Bool = false
+    /// 仅桌面悬浮窗使用；Widget 默认不显示，保持原有紧凑布局。
+    var accessory: AnyView? = nil
 
     private var phase: PricePhase { snapshot.phase }
 
@@ -32,7 +34,12 @@ struct SmallPhaseCard: View {
 
             clock
 
-            Spacer(minLength: 10)
+            if let accessory {
+                accessory
+                    .padding(.top, 8)
+            }
+
+            Spacer(minLength: 8)
 
             footer
         }

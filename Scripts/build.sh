@@ -10,10 +10,15 @@ MACOS_DIR="$STAGING_APP/Contents/MacOS"
 rm -rf "$STAGING_APP" "$APP_DIR"
 mkdir -p "$MACOS_DIR"
 swiftc -O \
+  -target "$(uname -m)-apple-macosx12.0" \
   -framework AppKit \
   -framework SwiftUI \
   -framework Combine \
+  -framework LocalAuthentication \
   -framework QuartzCore \
+  -framework UserNotifications \
+  -framework ServiceManagement \
+  -framework Security \
   "$ROOT_DIR"/Sources/Shared/*.swift \
   "$ROOT_DIR"/Sources/App/*.swift \
   -o "$MACOS_DIR/TimeDetect"
@@ -34,9 +39,9 @@ cat > "$STAGING_APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>1.1</string>
     <key>LSUIElement</key>
     <true/>
     <key>LSMultipleInstancesProhibited</key>

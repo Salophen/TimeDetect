@@ -12,7 +12,11 @@ final class FloatingWidgetWindow: NSPanel {
 
     private static let defaultSize = NSSize(width: 240, height: 240)
 
-    init(store: PhaseStore) {
+    init(
+        store: PhaseStore,
+        statusManager: DeepSeekStatusManager,
+        balanceManager: DeepSeekBalanceManager
+    ) {
         super.init(
             contentRect: NSRect(origin: .zero, size: Self.defaultSize),
             styleMask: [.borderless, .nonactivatingPanel, .resizable],
@@ -21,7 +25,7 @@ final class FloatingWidgetWindow: NSPanel {
         )
 
         isFloatingPanel = true
-        level = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue - 1)
+        applyWindowMode(store.floatingWindowMode)
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         isOpaque = false
         backgroundColor = .clear
@@ -34,11 +38,23 @@ final class FloatingWidgetWindow: NSPanel {
 
         let root = FloatingWidgetView()
             .environmentObject(store)
+            .environmentObject(statusManager)
+            .environmentObject(balanceManager)
 
         contentView = NSHostingView(rootView: root)
         minSize = NSSize(width: 220, height: 220)
         setContentSize(Self.defaultSize)
         positionAtDefaultCornerIfNeeded()
+    }
+
+    /// 只调整窗口层级，不重建窗口，也不改变用户保存的尺寸与坐标。
+    func applyWindowMode(_ mode: FloatingWindowMode) {
+        switch mode {
+        case .desktop:
+            level = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue - 1)
+        case .alwaysOnTop:
+            level = .floating
+        }
     }
 
     /// borderless 窗口默认不能成为 key window，这里放开以便接收右键菜单。
@@ -74,10 +90,15 @@ final class FloatingWidgetWindow: NSPanel {
 /// 悬浮挂件内容：复用 SmallPhaseCard，加一层拖动/关闭的交互装饰。
 struct FloatingWidgetView: View {
     @EnvironmentObject private var store: PhaseStore
+    @EnvironmentObject private var statusManager: DeepSeekStatusManager
+    @EnvironmentObject private var balanceManager: DeepSeekBalanceManager
     @State private var isHovering = false
 
     var body: some View {
-        SmallPhaseCard(snapshot: store.snapshot)
+        SmallPhaseCard(
+            snapshot: store.snapshot,
+            accessory: AnyView(DeepSeekOverview())
+        )
             .overlay(alignment: .topLeading) {
                 if isHovering {
                     Button {
@@ -100,5 +121,63 @@ struct FloatingWidgetView: View {
             .contentShape(Rectangle())
             .animation(.easeInOut(duration: 0.18), value: isHovering)
             .animation(.easeInOut(duration: 0.45), value: store.snapshot.phase)
+    }
+}
+
+/// 悬浮窗中的最小信息摘要：余额更醒目，服务状态作为辅助信息。
+private struct DeepSeekOverview: View {
+    @EnvironmentObject private var statusManager: DeepSeekStatusManager
+    @EnvironmentObject private var balanceManager: DeepSeekBalanceManager
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(balanceText)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Color.white.opacity(0.92))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            Spacer(minLength: 2)
+
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 5, height: 5)
+                Text(statusText)
+                    .lineLimit(1)
+            }
+            .font(.system(size: 9, weight: .medium, design: .rounded))
+            .foregroundStyle(Color.white.opacity(0.58))
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var balanceText: String {
+        guard let snapshot = balanceManager.balance,
+              let balance = snapshot.balances.first(where: { $0.currency == "CNY" })
+                ?? snapshot.balances.first else {
+            return balanceManager.isRefreshing ? "余额 …" : "余额 —"
+        }
+        return "余额 \(balance.totalText)"
+    }
+
+    private var statusText: String {
+        if let health = statusManager.snapshot?.overall {
+            return "DeepSeek \(health.title)"
+        }
+        return statusManager.isRefreshing ? "DeepSeek 检测中" : "DeepSeek 状态未知"
+    }
+
+    private var statusColor: Color {
+        guard let health = statusManager.snapshot?.overall else {
+            return statusManager.isRefreshing ? .blue : Color.white.opacity(0.3)
+        }
+        switch health {
+        case .operational: return .green
+        case .maintenance, .degraded: return .yellow
+        case .partialOutage, .majorOutage: return .red
+        case .unknown: return Color.white.opacity(0.3)
+        }
     }
 }

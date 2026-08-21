@@ -16,15 +16,15 @@ struct DayTimelineBar: View {
                     .fill(Color.white.opacity(0.08))
                     .frame(height: height)
 
-                // 峰时段高亮
-                ForEach(PeakEngine.dayWindows.filter { $0.phase == .peak }, id: \.self) { window in
+                // 完整绘制峰谷时段；暖橙代表峰时，青蓝代表谷时。
+                ForEach(PeakEngine.dayWindows, id: \.self) { window in
                     let x = width * CGFloat(window.startMinute) / 1440
                     let w = width * CGFloat(window.lengthInMinutes) / 1440
                     Capsule(style: .continuous)
-                        .fill(PhaseTheme.peak.barGradient)
+                        .fill(window.phase.theme.barGradient)
                         .frame(width: max(w, 2), height: height)
                         .offset(x: x)
-                        .opacity(snapshot.phase == .peak ? 0.95 : 0.55)
+                        .opacity(snapshot.phase == window.phase ? 0.96 : 0.58)
                 }
 
                 // 整点刻度（06/12/18）
@@ -94,6 +94,5 @@ struct PersonaName: View {
             .shadow(color: phase.theme.glow.opacity(0.35), radius: 8)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
-            .contentTransition(.opacity)
     }
 }

@@ -11,13 +11,19 @@ import QuartzCore
 /// 用 NSApplicationDelegate 而非 SwiftUI `MenuBarExtra`，
 /// 因为要同时控制一个自定义层级的 NSPanel，并兼容纯 swiftc 构建。
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     let store = PhaseStore()
+    let notificationManager = NotificationManager()
+    let launchAtLoginManager = LaunchAtLoginManager()
+    let statusManager = DeepSeekStatusManager()
+    let balanceManager = DeepSeekBalanceManager()
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var floatingWindow: FloatingWidgetWindow?
+    private var localClickMonitor: Any?
+    private var globalClickMonitor: Any?
     private var cancellables: Set<AnyCancellable> = []
     /// 上一次渲染的时段，用于只在切换瞬间做提示。
     private var lastPhase: PricePhase = PeakEngine.snapshot().phase
@@ -32,7 +38,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setUpStatusItem()
         setUpPopover()
         bindStore()
+        notificationManager.refreshPermissionState()
+        notificationManager.reschedule(
+            offPeakEnabled: store.offPeakNotificationEnabled,
+            advanceEnabled: store.advanceNotificationEnabled,
+            advanceMinutes: store.advanceNotificationMinutes
+        )
+        launchAtLoginManager.refresh()
         store.start()
+        statusManager.start()
+        balanceManager.start()
         syncFloatingWindow()
     }
 
@@ -48,7 +63,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        stopMonitoringOutsideClicks()
         store.stop()
+        statusManager.stop()
+        balanceManager.stop()
         cancellables.removeAll()
     }
 
@@ -81,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
         let isRightClick = NSApp.currentEvent?.type == .rightMouseUp
         if isRightClick {
+            popover?.performClose(nil)
             showContextMenu(from: sender)
         } else {
             togglePopover(from: sender)
@@ -93,11 +112,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let popover = NSPopover()
         popover.behavior = .transient
         popover.animates = true
-        popover.contentSize = NSSize(width: 368, height: 320)
+        popover.contentSize = NSSize(width: 368, height: 560)
+        popover.delegate = self
         popover.contentViewController = NSHostingController(
-            rootView: MenuBarPanel().environmentObject(store)
+            rootView: MenuBarPanel()
+                .environmentObject(store)
+                .environmentObject(notificationManager)
+                .environmentObject(launchAtLoginManager)
+                .environmentObject(statusManager)
+                .environmentObject(balanceManager)
         )
         self.popover = popover
+    }
+
+    func popoverDidShow(_ notification: Notification) {
+        startMonitoringOutsideClicks()
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        stopMonitoringOutsideClicks()
+    }
+
+    /// `.transient` 负责常规自动收起；显式监听再覆盖点击其他 App、桌面或桌面挂件的情况。
+    private func startMonitoringOutsideClicks() {
+        stopMonitoringOutsideClicks()
+        let eventTypes: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: eventTypes) { [weak self] event in
+            guard let self, self.popover?.isShown == true else { return event }
+            let popoverWindow = self.popover?.contentViewController?.view.window
+            let statusItemWindow = self.statusItem?.button?.window
+            if event.window !== popoverWindow, event.window !== statusItemWindow {
+                self.popover?.performClose(nil)
+            }
+            return event
+        }
+
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: eventTypes) { [weak self] _ in
+            self?.popover?.performClose(nil)
+        }
+    }
+
+    private func stopMonitoringOutsideClicks() {
+        if let localClickMonitor {
+            NSEvent.removeMonitor(localClickMonitor)
+            self.localClickMonitor = nil
+        }
+        if let globalClickMonitor {
+            NSEvent.removeMonitor(globalClickMonitor)
+            self.globalClickMonitor = nil
+        }
     }
 
     private func togglePopover(from sender: NSStatusBarButton) {
@@ -105,6 +169,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            launchAtLoginManager.refresh()
+            notificationManager.refreshPermissionState()
+            statusManager.refresh()
+            balanceManager.refreshIfStale()
             popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
             // 让面板里的 Toggle 能直接响应点击
             popover.contentViewController?.view.window?.makeKey()
@@ -162,13 +230,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.syncFloatingWindow() }
             .store(in: &cancellables)
+
+        store.$floatingWindowMode
+            .receive(on: RunLoop.main)
+            .sink { [weak self] mode in
+                self?.floatingWindow?.applyWindowMode(mode)
+            }
+            .store(in: &cancellables)
+
+        store.$offPeakNotificationEnabled
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] offPeakEnabled in
+                guard let self else { return }
+                if offPeakEnabled {
+                    self.notificationManager.requestPermissionAndSchedule(
+                        offPeakEnabled: offPeakEnabled,
+                        advanceEnabled: self.store.advanceNotificationEnabled,
+                        advanceMinutes: self.store.advanceNotificationMinutes
+                    )
+                } else {
+                    self.notificationManager.reschedule(
+                        offPeakEnabled: false,
+                        advanceEnabled: self.store.advanceNotificationEnabled,
+                        advanceMinutes: self.store.advanceNotificationMinutes
+                    )
+                }
+            }
+            .store(in: &cancellables)
+
+        store.$advanceNotificationEnabled
+            .combineLatest(store.$advanceNotificationMinutes)
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] advanceEnabled, advanceMinutes in
+                guard let self else { return }
+                self.notificationManager.rescheduleAdvance(
+                    offPeakEnabled: self.store.offPeakNotificationEnabled,
+                    advanceEnabled: advanceEnabled,
+                    advanceMinutes: advanceMinutes
+                )
+            }
+            .store(in: &cancellables)
     }
 
     private func syncFloatingWindow(bringForward: Bool = false) {
         if store.floatingWidgetVisible {
             if floatingWindow == nil {
-                floatingWindow = FloatingWidgetWindow(store: store)
+                floatingWindow = FloatingWidgetWindow(
+                    store: store,
+                    statusManager: statusManager,
+                    balanceManager: balanceManager
+                )
             }
+            floatingWindow?.applyWindowMode(store.floatingWindowMode)
             if bringForward {
                 floatingWindow?.orderFrontRegardless()
             } else {

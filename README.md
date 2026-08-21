@@ -1,6 +1,16 @@
 # TimeDetect
 
-TimeDetect 是一个无第三方依赖的 macOS 菜单栏与桌面悬浮小挂件，用北京时间显示 DeepSeek 的峰时/谷时状态。
+TimeDetect 是一个无第三方依赖的 macOS 菜单栏与桌面悬浮小挂件，用北京时间显示 DeepSeek 峰谷时段，并轻量监测官方服务状态与 API 账户余额。
+
+1.1 新增北京时间谷时通知与提前提醒、桌面/始终置顶显示层级，以及 macOS 13+ 原生登录自动启动。通知和登录项均由系统 API 管理，不增加后台轮询 Timer。
+
+## DeepSeek 服务与 API 账户
+
+- **官方服务状态**：主 App 优先读取 DeepSeek 当前使用的 Flashcat 官方状态页公开数据，展示整体状态、API Service、Chat Service 与进行中的简短事件；同时保留迁移前 Statuspage JSON 的兼容回退。Flashcat 的结构化 JSON 嵌在服务端渲染页面中，App 会校验 DeepSeek 页面 ID 与域名后再解析，不会仅因 HTML 可访问就判定服务正常。数据无法验证时显示“状态暂不可用”，不会把本机网络问题误报为 DeepSeek 宕机。
+- **API 余额**：配置用户自己的 DeepSeek API Key 后，主 App 通过官方 `GET https://api.deepseek.com/user/balance` 展示 CNY、USD 等接口实际返回的币种、充值余额、赠送余额及 `is_available` 状态；不做汇率换算，也不调用聊天接口测试余额。
+- **安全策略**：API Key 仅保存在本机 macOS Keychain（service `local.timedetect.app.deepseek`），仅随余额请求发送至 `api.deepseek.com`。Key 不写入 UserDefaults、项目文件或日志；Widget Extension 不读取 Keychain，也不请求余额。App 启动时会以禁止交互的方式恢复 Key（不会弹出系统认证窗口），并从 UserDefaults 恢复不含 Key 的最近一次余额快照。账户区域可永久删除已有 Key；确认后会停止相关请求并清空内存状态、余额缓存和钥匙串凭据，再回读验证删除结果。
+
+网络刷新保持低频：App 启动立即查询服务状态，此后每 60 秒查询；打开 Popup 与手动按钮也可触发刷新。已配置 API Key 时，App 重启会先恢复最近一次余额并自动查询最新值，此后每 5 分钟查询；打开 Popup 时只有数据超过 60 秒才刷新。重复的同类在途请求会被忽略。
 
 ## 时段规则
 
@@ -10,6 +20,8 @@ TimeDetect 是一个无第三方依赖的 macOS 菜单栏与桌面悬浮小挂�
 - 谷时：`00:00–09:00`、`12:00–14:00`、`18:00–24:00`，显示 `梁文谷 · 0.5x 半价`
 
 所有端点采用左闭右开区间，所以 `09:00`、`14:00` 立即进入峰时，`12:00`、`18:00` 立即进入谷时。
+
+峰谷计算完全在本地完成，不依赖联网。峰谷时钟使用一个带 tolerance 的 1 秒本地 Timer；服务状态和余额使用可取消的低频 async polling，不绑定该 Timer。
 
 ## 构建与运行
 
@@ -32,10 +44,12 @@ cd /Users/TimeDetect
 ./Scripts/test.sh
 ```
 
-测试覆盖四个切换点、切换点前一秒、跨日倒计时、Widget Timeline 节点和倒计时格式化。
+测试覆盖峰谷切换、通知与 Widget Timeline，以及 Statuspage 状态映射、组件名称解析、余额 Decimal/多币种解析、HTTP 错误分类和 mock Key 存储。网络测试使用 mock JSON，不请求 DeepSeek；普通测试不访问用户系统钥匙串。
 
 ## WidgetKit 源码
 
 `Sources/Widget/WidgetExtension.swift` 是 WidgetKit 扩展 target 的完整入口，支持 `systemSmall` 和 `systemMedium`。它使用 `WidgetTimelinePlan` 预排当前时间起未来几天的 `09:00 / 12:00 / 14:00 / 18:00` 状态切换；时钟使用 WidgetKit 托管的 `Text(date, style: .time)`，不会要求扩展进程每秒常驻运行。
+
+联网功能只编译进主 App。WidgetKit 继续只负责本地峰谷时间显示，不接触 API Key、Keychain 或余额接口。
 
 当前工程保留纯 `swiftc` 菜单栏 App 架构，因此 Widget 扩展需要在 Xcode 中新建 macOS Widget Extension target，并将 `Sources/Shared/*.swift` 与 `Sources/Widget/WidgetExtension.swift` 加入该 target。菜单栏 App 的 `Scripts/build.sh` 会刻意排除 `Sources/Widget`，避免两个 `@main` 入口混入同一个可执行文件。
