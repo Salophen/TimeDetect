@@ -10,7 +10,9 @@ import AppKit
 ///   - 不进入 Dock、不抢焦点，点击拖动即可移动位置。
 final class FloatingWidgetWindow: NSPanel {
 
-    private static let defaultSize = NSSize(width: 240, height: 240)
+    /// 当前卡片包含余额和服务状态摘要，240 × 240 是其完整显示所需的最小尺寸。
+    private static let minimumSize = NSSize(width: 240, height: 240)
+    private static let frameAutosaveName = "TimeDetectFloatingWidget"
 
     init(
         store: PhaseStore,
@@ -18,7 +20,7 @@ final class FloatingWidgetWindow: NSPanel {
         balanceManager: DeepSeekBalanceManager
     ) {
         super.init(
-            contentRect: NSRect(origin: .zero, size: Self.defaultSize),
+            contentRect: NSRect(origin: .zero, size: Self.minimumSize),
             styleMask: [.borderless, .nonactivatingPanel, .resizable],
             backing: .buffered,
             defer: false
@@ -42,9 +44,9 @@ final class FloatingWidgetWindow: NSPanel {
             .environmentObject(balanceManager)
 
         contentView = NSHostingView(rootView: root)
-        minSize = NSSize(width: 220, height: 220)
-        setContentSize(Self.defaultSize)
-        positionAtDefaultCornerIfNeeded()
+        minSize = Self.minimumSize
+        setContentSize(Self.minimumSize)
+        restoreAndNormalizeFrame()
     }
 
     /// 只调整窗口层级，不重建窗口，也不改变用户保存的尺寸与坐标。
@@ -61,9 +63,14 @@ final class FloatingWidgetWindow: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
-    /// 首次启动时放到主屏右上角，之后由系统记住用户拖动的位置。
-    private func positionAtDefaultCornerIfNeeded() {
-        setFrameAutosaveName("TimeDetectFloatingWidget")
+    /// 恢复保存的 frame，并在恢复后兼容旧版的小尺寸 frame。
+    ///
+    /// 不能只依赖 `setFrameAutosaveName` 的隐式恢复：旧 frame 可能在窗口
+    /// 初始化之后才被 AppKit 应用，因此尺寸校正必须紧跟一次显式恢复执行。
+    private func restoreAndNormalizeFrame() {
+        setFrameAutosaveName(Self.frameAutosaveName)
+        _ = setFrameUsingName(Self.frameAutosaveName, force: false)
+
         if frame.origin == .zero, let screen = NSScreen.main {
             let visible = screen.visibleFrame
             let origin = NSPoint(
@@ -73,16 +80,17 @@ final class FloatingWidgetWindow: NSPanel {
             setFrameOrigin(origin)
         }
 
-        // 兼容旧版保存的 190 × 190 frame：保留其右上角位置，只升级尺寸。
-        if frame.width < Self.defaultSize.width || frame.height < Self.defaultSize.height {
+        if frame.size.width < Self.minimumSize.width || frame.size.height < Self.minimumSize.height {
             let topRight = NSPoint(x: frame.maxX, y: frame.maxY)
             let upgradedFrame = NSRect(
-                x: topRight.x - Self.defaultSize.width,
-                y: topRight.y - Self.defaultSize.height,
-                width: Self.defaultSize.width,
-                height: Self.defaultSize.height
+                x: topRight.x - Self.minimumSize.width,
+                y: topRight.y - Self.minimumSize.height,
+                width: Self.minimumSize.width,
+                height: Self.minimumSize.height
             )
             setFrame(upgradedFrame, display: false)
+            // 立即覆盖旧的 autosave 值，避免下一次启动再次恢复小尺寸。
+            saveFrame(usingName: Self.frameAutosaveName)
         }
     }
 }

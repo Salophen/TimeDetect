@@ -7,6 +7,16 @@ struct DayTimelineBar: View {
     var height: CGFloat = 6
     var showsHourTicks: Bool = true
 
+    private var isWeekend: Bool {
+        !PeakEngine.isWeekday(at: snapshot.date)
+    }
+
+    private var timelineWindows: [PhaseWindow] {
+        isWeekend
+            ? [PhaseWindow(startMinute: 0, endMinute: 1440, phase: .offPeak)]
+            : PeakEngine.dayWindows
+    }
+
     var body: some View {
         GeometryReader { geo in
             let width = geo.size.width
@@ -17,14 +27,14 @@ struct DayTimelineBar: View {
                     .frame(height: height)
 
                 // 完整绘制峰谷时段；暖橙代表峰时，青蓝代表谷时。
-                ForEach(PeakEngine.dayWindows, id: \.self) { window in
+                ForEach(timelineWindows, id: \.self) { window in
                     let x = width * CGFloat(window.startMinute) / 1440
                     let w = width * CGFloat(window.lengthInMinutes) / 1440
                     Capsule(style: .continuous)
-                        .fill(window.phase.theme.barGradient)
+                        .fill(isWeekend ? PhaseTheme.weekendBarGradient : window.phase.theme.barGradient)
                         .frame(width: max(w, 2), height: height)
                         .offset(x: x)
-                        .opacity(snapshot.phase == window.phase ? 0.96 : 0.58)
+                        .opacity(isWeekend || snapshot.phase == window.phase ? 0.96 : 0.58)
                 }
 
                 // 整点刻度（06/12/18）

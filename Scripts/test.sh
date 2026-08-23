@@ -7,8 +7,8 @@ mkdir -p "$TEST_DIR"
 
 swiftc -O \
   -framework Combine \
-  -framework LocalAuthentication \
   -framework Security \
+  -framework LocalAuthentication \
   "$ROOT_DIR/Sources/Shared/PeakEngine.swift" \
   "$ROOT_DIR/Sources/Shared/NotificationPlan.swift" \
   "$ROOT_DIR/Sources/Shared/WidgetSupport.swift" \

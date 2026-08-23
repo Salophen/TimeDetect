@@ -88,7 +88,7 @@ final class DeepSeekBalanceManager: ObservableObject {
 
     init(
         client: HTTPClient = URLSessionHTTPClient(),
-        keyStore: APIKeyStoring = KeychainManager(),
+        keyStore: APIKeyStoring = UserDefaultsAPIKeyStore(),
         balanceCache: BalanceCaching = UserDefaultsBalanceCache()
     ) {
         self.client = client

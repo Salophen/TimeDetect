@@ -14,11 +14,11 @@ swiftc -O \
   -framework AppKit \
   -framework SwiftUI \
   -framework Combine \
-  -framework LocalAuthentication \
   -framework QuartzCore \
   -framework UserNotifications \
   -framework ServiceManagement \
   -framework Security \
+  -framework LocalAuthentication \
   "$ROOT_DIR"/Sources/Shared/*.swift \
   "$ROOT_DIR"/Sources/App/*.swift \
   -o "$MACOS_DIR/TimeDetect"
@@ -39,9 +39,9 @@ cat > "$STAGING_APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>3</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1</string>
+    <string>1.1.1</string>
     <key>LSUIElement</key>
     <true/>
     <key>LSMultipleInstancesProhibited</key>

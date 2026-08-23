@@ -251,33 +251,59 @@ struct MenuBarPanel: View {
                 Spacer()
             }
 
-            HStack(spacing: 6) {
-                ForEach(PeakEngine.dayWindows, id: \.self) { window in
-                    let isCurrent = store.snapshot.beijingMinuteOfDay >= window.startMinute
-                        && store.snapshot.beijingMinuteOfDay < window.endMinute
-                    VStack(spacing: 3) {
-                        Text(PeakEngine.clockText(fromBeijingMinute: window.startMinute))
-                            .font(.system(size: 9, weight: .medium, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(isCurrent
-                                ? Color.white.opacity(0.95)
-                                : window.phase.theme.accentStart.opacity(0.72))
+            GeometryReader { geometry in
+                let windows = scheduleWindows
+                let spacing: CGFloat = windows.count > 1 ? 4 : 0
+                let availableWidth = max(0, geometry.size.width - spacing * CGFloat(windows.count - 1))
 
-                        Capsule()
-                            .fill(window.phase.theme.barGradient)
-                            .frame(height: isCurrent ? 5 : 3)
-                            .opacity(isCurrent ? 1 : 0.72)
+                HStack(spacing: spacing) {
+                    ForEach(windows, id: \.self) { window in
+                        let isCurrent = store.snapshot.beijingMinuteOfDay >= window.startMinute
+                            && store.snapshot.beijingMinuteOfDay < window.endMinute
+                        let width = availableWidth * CGFloat(window.lengthInMinutes) / 1440
+                        VStack(spacing: 3) {
+                            Text(PeakEngine.clockText(fromBeijingMinute: window.startMinute))
+                                .font(.system(size: 9, weight: .medium, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(isCurrent
+                                    ? Color.white.opacity(0.95)
+                                    : scheduleColor(for: window).opacity(0.72))
 
-                        Text(window.phase.shortLabel)
-                            .font(.system(size: 8, weight: .semibold, design: .rounded))
-                            .foregroundStyle(isCurrent
-                                ? Color.white.opacity(0.88)
-                                : window.phase.theme.accentStart.opacity(0.62))
+                            Capsule()
+                                .fill(scheduleGradient(for: window))
+                                .frame(height: isCurrent ? 5 : 3)
+                                .opacity(isCurrent ? 1 : 0.72)
+
+                            Text(window.phase.shortLabel)
+                                .font(.system(size: 8, weight: .semibold, design: .rounded))
+                                .foregroundStyle(isCurrent
+                                    ? Color.white.opacity(0.88)
+                                    : scheduleColor(for: window).opacity(0.62))
+                        }
+                        .frame(width: max(width, 2))
                     }
-                    .frame(maxWidth: .infinity)
                 }
             }
+            .frame(height: 43)
         }
+    }
+
+    private var scheduleWindows: [PhaseWindow] {
+        PeakEngine.isWeekday(at: store.snapshot.date)
+            ? PeakEngine.dayWindows
+            : [PhaseWindow(startMinute: 0, endMinute: 1440, phase: .offPeak)]
+    }
+
+    private func scheduleGradient(for window: PhaseWindow) -> LinearGradient {
+        PeakEngine.isWeekday(at: store.snapshot.date)
+            ? window.phase.theme.barGradient
+            : PhaseTheme.weekendBarGradient
+    }
+
+    private func scheduleColor(for window: PhaseWindow) -> Color {
+        PeakEngine.isWeekday(at: store.snapshot.date)
+            ? window.phase.theme.accentStart
+            : Color(red: 0.28, green: 0.58, blue: 1.00)
     }
 
     private var controls: some View {

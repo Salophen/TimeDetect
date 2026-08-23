@@ -140,21 +140,36 @@ enum PeakEngineTests {
         check(PeakEngine.phase(at: beijingDate(17, 59, 59)) == .peak, "17:59:59 is peak")
         check(PeakEngine.phase(at: beijingDate(18, 0)) == .offPeak, "18:00 is off-peak")
 
+        let saturday = beijingDate(9, 0, dayOffset: 2)
+        let sunday = beijingDate(14, 0, dayOffset: 3)
+        let monday = beijingDate(9, 0, dayOffset: 4)
+        check(PeakEngine.phase(at: saturday) == .offPeak, "Saturday is entirely off-peak")
+        check(PeakEngine.phase(at: sunday) == .offPeak, "Sunday is entirely off-peak")
+        check(PeakEngine.nextBoundary(after: saturday) == monday, "Saturday transitions next Monday at 09:00")
+        check(PeakEngine.nextBoundary(after: sunday) == monday, "Sunday transitions next Monday at 09:00")
+
         let evening = beijingDate(23, 30)
         let nextMorning = beijingDate(9, 0, dayOffset: 1)
         check(PeakEngine.nextBoundary(after: evening) == nextMorning, "evening transitions next day at 09:00")
         check(PeakEngine.snapshot(at: evening).secondsToNextBoundary == 9.5 * 3600, "evening countdown is 9.5 hours")
 
+        let fridayEvening = beijingDate(19, 0, dayOffset: 1)
+        check(PeakEngine.nextBoundary(after: fridayEvening) == monday, "Friday evening transitions next Monday at 09:00")
+
         let entries = WidgetTimelinePlan.entries(from: beijingDate(8, 0), days: 1)
         check(entries.map { $0.date } == [
             beijingDate(8, 0), beijingDate(9, 0), beijingDate(12, 0), beijingDate(14, 0), beijingDate(18, 0)
         ], "widget entries contain only the four daily transitions")
+        let weekendEntries = WidgetTimelinePlan.entries(from: saturday, days: 1)
+        check(weekendEntries.map { $0.date } == [saturday], "weekend widget has no false peak transitions")
         check(PeakEngine.countdownText(3_661) == "1:01:01", "countdown formats hours")
         check(PeakEngine.countdownText(59) == "00:59", "countdown formats under one hour")
 
         let offPeakPlans = TimeDetectNotificationPlan.offPeakPlans()
-        check(offPeakPlans.map { [$0.hour, $0.minute] } == [[12, 0], [18, 0]], "off-peak notifications run at 12:00 and 18:00")
-        check(offPeakPlans.map(\.identifier) == ["timedetect.offpeak.1200", "timedetect.offpeak.1800"], "off-peak identifiers are stable")
+        check(offPeakPlans.count == 10, "off-peak notifications cover five weekdays")
+        check(Set(offPeakPlans.map(\.weekday)) == Set(2...6), "off-peak notifications exclude weekends")
+        check(offPeakPlans.filter { $0.weekday == 2 }.map { [$0.hour, $0.minute] } == [[12, 0], [18, 0]], "Monday notifications run at 12:00 and 18:00")
+        check(offPeakPlans.map(\.identifier).prefix(2) == ["timedetect.offpeak.2.1200", "timedetect.offpeak.2.1800"], "off-peak identifiers are stable")
         check(offPeakPlans.allSatisfy { $0.dateComponents.timeZone == PeakEngine.beijingTimeZone }, "off-peak plans use Beijing timezone")
 
         let expectedAdvanceTimes: [Int: [[Int]]] = [
@@ -165,11 +180,11 @@ enum PeakEngineTests {
         ]
         for minutes in [5, 10, 15, 30] {
             let plans = TimeDetectNotificationPlan.advancePlans(minutes: minutes)
-            check(plans.map { [$0.hour, $0.minute] } == expectedAdvanceTimes[minutes]!, "advance \(minutes)-minute notification times")
+            check(plans.filter { $0.weekday == 2 }.map { [$0.hour, $0.minute] } == expectedAdvanceTimes[minutes]!, "advance \(minutes)-minute notification times")
             check(plans.allSatisfy { $0.dateComponents.timeZone == PeakEngine.beijingTimeZone }, "advance \(minutes)-minute plans use Beijing timezone")
         }
-        check(TimeDetectNotificationPlan.advancePlans(minutes: 10).map(\.identifier) == [
-            "timedetect.advance.1200", "timedetect.advance.1800"
+        check(TimeDetectNotificationPlan.advancePlans(minutes: 10).filter { $0.weekday == 2 }.map(\.identifier) == [
+            "timedetect.advance.2.1200", "timedetect.advance.2.1800"
         ], "advance identifiers are stable across minute settings")
 
         check(FloatingWindowMode.defaultMode == .desktop, "floating window defaults to desktop mode")

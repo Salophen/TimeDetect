@@ -242,7 +242,7 @@ struct MediumPhaseCard: View {
 
                 Spacer(minLength: 0)
 
-                Text("09-12 / 14-18 峰")
+                Text("工作日 09-12 / 14-18 峰")
                     .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundStyle(Color.white.opacity(0.30))
             }

@@ -43,6 +43,16 @@ struct PhaseTheme {
             endPoint: .trailing
         )
     }
+
+    /// 周末全天使用统一的蓝色时间条，不与工作日的峰谷颜色混淆。
+    static let weekendBarGradient = LinearGradient(
+        colors: [
+            Color(red: 0.28, green: 0.58, blue: 1.00),
+            Color(red: 0.12, green: 0.36, blue: 0.92)
+        ],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
 }
 
 extension PricePhase {

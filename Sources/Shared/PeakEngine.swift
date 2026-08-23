@@ -1,7 +1,8 @@
 import Foundation
 
 /// DeepSeek 计费时段。
-/// 官方规则（北京时间 UTC+8）：高峰时段 09:00-12:00、14:00-18:00，其余为空闲时段。
+/// 官方规则按 UTC 发布：周一至周五 01:00-04:00、06:00-10:00 UTC 为峰时，
+/// 换算为北京时间即工作日 09:00-12:00、14:00-18:00；周末全天为空闲时段。
 /// 空闲时段价格为高峰时段的一半。
 enum PricePhase: String, Hashable {
     case peak      // 高峰时段 —— 梁文锋
@@ -89,7 +90,7 @@ enum PeakEngine {
 
     static let beijingTimeZone = TimeZone(identifier: "Asia/Shanghai") ?? TimeZone(secondsFromGMT: 8 * 3600)!
 
-    /// 高峰时段区间（北京时间，单位：分钟）。
+    /// 工作日高峰时段区间（北京时间，单位：分钟）。
     static let peakRanges: [(start: Int, end: Int)] = [
         (9 * 60, 12 * 60),
         (14 * 60, 18 * 60)
@@ -125,6 +126,7 @@ enum PeakEngine {
     }
 
     static func phase(at date: Date) -> PricePhase {
+        guard isWeekday(at: date) else { return .offPeak }
         let minutes = beijingMinutes(for: date)
         for range in peakRanges where minutes >= Double(range.start) && minutes < Double(range.end) {
             return .peak
@@ -136,11 +138,19 @@ enum PeakEngine {
     static func nextBoundary(after date: Date) -> Date {
         let dayStart = startOfBeijingDay(for: date)
         let minutes = beijingMinutes(for: date)
-        for boundary in boundaryMinutes where Double(boundary) > minutes {
-            return dayStart.addingTimeInterval(Double(boundary) * 60)
+        if isWeekday(at: date) {
+            for boundary in boundaryMinutes where Double(boundary) > minutes {
+                return dayStart.addingTimeInterval(Double(boundary) * 60)
+            }
         }
-        // 18:00 之后直到次日 09:00 都是谷时。
-        return dayStart.addingTimeInterval(24 * 3600 + 9 * 60 * 60)
+        // 当前日剩余时间，以及周末，都跳到下一个工作日 09:00。
+        for dayOffset in 1...7 {
+            guard let candidateDay = beijingCalendar.date(byAdding: .day, value: dayOffset, to: dayStart),
+                  isWeekday(at: candidateDay) else { continue }
+            return candidateDay.addingTimeInterval(9 * 60 * 60)
+        }
+        // Gregorian calendar always has a weekday in the next seven days.
+        return dayStart.addingTimeInterval(7 * 24 * 3600 + 9 * 60 * 60)
     }
 
     /// 当天全部切换时刻，供 WidgetKit 预排 Timeline（低功耗关键）。
@@ -150,12 +160,19 @@ enum PeakEngine {
         guard days > 0 else { return [] }
         for dayOffset in 0..<days {
             let base = beijingCalendar.date(byAdding: .day, value: dayOffset, to: dayStart) ?? dayStart
+            guard isWeekday(at: base) else { continue }
             for boundary in boundaryMinutes {
                 let candidate = base.addingTimeInterval(Double(boundary) * 60)
                 if candidate > date { result.append(candidate) }
             }
         }
         return result.sorted()
+    }
+
+    /// DeepSeek 的峰时只在北京时间周一至周五生效。
+    static func isWeekday(at date: Date) -> Bool {
+        let weekday = beijingCalendar.component(.weekday, from: date)
+        return (2...6).contains(weekday) // Sunday = 1, Monday = 2
     }
 
     static func snapshot(at date: Date = Date()) -> PhaseSnapshot {
