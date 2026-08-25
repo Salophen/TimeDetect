@@ -12,10 +12,14 @@ public class DeepSeekStatusManagerTests
     {
         var client = new MockHTTPClient(new MockResponse(
             TestData.FlashcatPage(apiStatus: "degraded"), 200));
+        client.RequestStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.RequestRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var manager = new DeepSeekStatusManager(client);
 
         var first = manager.RefreshAsync();
+        await client.RequestStarted.Task;
         var second = manager.RefreshAsync(); // 在途去重
+        client.RequestRelease.TrySetResult(true);
         await first;
         await second;
 

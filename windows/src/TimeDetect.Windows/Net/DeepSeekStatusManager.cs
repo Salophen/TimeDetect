@@ -12,8 +12,10 @@ namespace TimeDetect.Net;
 public sealed class DeepSeekStatusManager : INotifyPropertyChanged
 {
     private readonly IHTTPClient _client;
+    private readonly object _refreshLock = new();
     private CancellationTokenSource? _monitorCts;
     private CancellationTokenSource? _requestCts;
+    private Task? _refreshTask;
 
     private ServiceStatusSnapshot? _snapshot;
     private bool _isRefreshing;
@@ -73,20 +75,29 @@ public sealed class DeepSeekStatusManager : INotifyPropertyChanged
     public void Refresh() => _ = RefreshAsync();
 
     /// <summary>返回可等待的任务，便于测试确定性等待；在途重复请求会被忽略。</summary>
-    public async Task RefreshAsync()
+    public Task RefreshAsync()
     {
-        if (_isRefreshing) return;
+        lock (_refreshLock)
+        {
+            if (_refreshTask is { IsCompleted: false }) return Task.CompletedTask;
+
+            var requestCts = new CancellationTokenSource();
+            _requestCts = requestCts;
+            _refreshTask = RefreshCoreAsync(requestCts);
+            return _refreshTask;
+        }
+    }
+
+    private async Task RefreshCoreAsync(CancellationTokenSource requestCts)
+    {
         _isRefreshing = true;
         OnPropertyChanged(nameof(IsRefreshing));
 
-        var client = _client;
-        _requestCts?.Cancel();
-        _requestCts = new CancellationTokenSource();
-        var ct = _requestCts.Token;
+        var ct = requestCts.Token;
 
         try
         {
-            var value = await FetchAsync(client, ct);
+            var value = await FetchAsync(_client, ct);
             if (ct.IsCancellationRequested) return;
             Snapshot = value;
             LastUpdated = DateTimeOffset.Now;
@@ -100,7 +111,17 @@ public sealed class DeepSeekStatusManager : INotifyPropertyChanged
         }
         finally
         {
-            if (_requestCts?.Token == ct)
+            bool ownsRefreshState;
+            lock (_refreshLock)
+            {
+                ownsRefreshState = ReferenceEquals(_requestCts, requestCts);
+                if (ownsRefreshState)
+                {
+                    _requestCts = null;
+                    _refreshTask = null;
+                }
+            }
+            if (ownsRefreshState)
             {
                 _isRefreshing = false;
                 OnPropertyChanged(nameof(IsRefreshing));
@@ -111,9 +132,13 @@ public sealed class DeepSeekStatusManager : INotifyPropertyChanged
     public void Stop()
     {
         _monitorCts?.Cancel();
-        _requestCts?.Cancel();
+        lock (_refreshLock)
+        {
+            _requestCts?.Cancel();
+            _requestCts = null;
+            _refreshTask = null;
+        }
         _monitorCts = null;
-        _requestCts = null;
         IsRefreshing = false;
     }
 

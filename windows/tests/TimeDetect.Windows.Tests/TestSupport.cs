@@ -15,6 +15,8 @@ public sealed class MockHTTPClient : IHTTPClient
 {
     private readonly Queue<MockResponse> _queue;
     public List<HttpRequestMessage> Requests { get; } = new();
+    public TaskCompletionSource<bool>? RequestStarted { get; set; }
+    public TaskCompletionSource<bool>? RequestRelease { get; set; }
 
     public MockHTTPClient(IEnumerable<MockResponse> responses) => _queue = new Queue<MockResponse>(responses);
     public MockHTTPClient(params MockResponse[] responses) => _queue = new Queue<MockResponse>(responses);
@@ -24,6 +26,9 @@ public sealed class MockHTTPClient : IHTTPClient
         // 模拟真实网络 I/O 的异步让出，避免同步完成导致「在途去重」逻辑失效。
         await Task.Yield();
         Requests.Add(request);
+        RequestStarted?.TrySetResult(true);
+        if (RequestRelease != null)
+            await RequestRelease.Task.WaitAsync(cancellationToken);
         if (_queue.Count == 0)
             throw new HttpRequestException("No more mock responses configured.");
         var next = _queue.Dequeue();
