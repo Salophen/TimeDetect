@@ -6,24 +6,37 @@ BUILD_DIR="$ROOT_DIR/.build"
 STAGING_APP="$BUILD_DIR/TimeDetect.app"
 APP_DIR="$ROOT_DIR/TimeDetect.app"
 MACOS_DIR="$STAGING_APP/Contents/MacOS"
+VERSION="${TIMEDETECT_VERSION:-1.2.0}"
 
 rm -rf "$STAGING_APP" "$APP_DIR"
 mkdir -p "$MACOS_DIR"
-swiftc -O \
-  -target "$(uname -m)-apple-macosx12.0" \
-  -framework AppKit \
-  -framework SwiftUI \
-  -framework Combine \
-  -framework QuartzCore \
-  -framework UserNotifications \
-  -framework ServiceManagement \
-  -framework Security \
-  -framework LocalAuthentication \
-  "$ROOT_DIR"/Sources/Shared/*.swift \
-  "$ROOT_DIR"/Sources/App/*.swift \
-  -o "$MACOS_DIR/TimeDetect"
+SWIFT_SOURCES=(
+  "$ROOT_DIR"/Sources/Shared/*.swift
+  "$ROOT_DIR"/Sources/App/*.swift
+)
 
-cat > "$STAGING_APP/Contents/Info.plist" <<'PLIST'
+build_arch() {
+  local arch="$1"
+  local output="$BUILD_DIR/TimeDetect-$arch"
+  swiftc -O \
+    -target "$arch-apple-macosx12.0" \
+    -framework AppKit \
+    -framework SwiftUI \
+    -framework Combine \
+    -framework QuartzCore \
+    -framework UserNotifications \
+    -framework ServiceManagement \
+    -framework Security \
+    -framework LocalAuthentication \
+    "${SWIFT_SOURCES[@]}" \
+    -o "$output"
+}
+
+build_arch arm64
+build_arch x86_64
+lipo -create "$BUILD_DIR/TimeDetect-arm64" "$BUILD_DIR/TimeDetect-x86_64" -output "$MACOS_DIR/TimeDetect"
+
+cat > "$STAGING_APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -39,9 +52,9 @@ cat > "$STAGING_APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
-    <string>3</string>
+    <string>4</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.1</string>
+    <string>$VERSION</string>
     <key>LSUIElement</key>
     <true/>
     <key>LSMultipleInstancesProhibited</key>

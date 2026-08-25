@@ -1,0 +1,10 @@
+{
+  "status": { "indicator": "minor" },
+  "components": [
+    { "name": "API Service", "status": "degraded_performance" },
+    { "name": "Web Chat Service", "status": "operational" }
+  ],
+  "incidents": [
+    { "id": "i1", "name": "API performance issue", "status": "investigating" }
+  ]
+}

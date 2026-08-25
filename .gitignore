@@ -1,5 +1,6 @@
 .DS_Store
 
+# ---- macOS (Swift) ----
 # Local Swift build products
 .build/
 TimeDetect.app/
@@ -7,3 +8,14 @@ TimeDetect.app/
 # Release archives and checksums
 TimeDetect-*.zip
 TimeDetect-*.zip.sha256
+
+# ---- Windows (.NET) ----
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# Local Windows publish output
+dist/

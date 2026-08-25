@@ -1,0 +1,27 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimeDetect.Windows", "src\TimeDetect.Windows\TimeDetect.Windows.csproj", "{7A2B5C1D-3E4F-4A5B-9C6D-1E2F3A4B5C6D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimeDetect.Windows.Tests", "tests\TimeDetect.Windows.Tests\TimeDetect.Windows.Tests.csproj", "{8B3C6D2E-4F5A-5B6C-AD7E-2F3A4B5C6D7E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7A2B5C1D-3E4F-4A5B-9C6D-1E2F3A4B5C6D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7A2B5C1D-3E4F-4A5B-9C6D-1E2F3A4B5C6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7A2B5C1D-3E4F-4A5B-9C6D-1E2F3A4B5C6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7A2B5C1D-3E4F-4A5B-9C6D-1E2F3A4B5C6D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8B3C6D2E-4F5A-5B6C-AD7E-2F3A4B5C6D7E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B3C6D2E-4F5A-5B6C-AD7E-2F3A4B5C6D7E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B3C6D2E-4F5A-5B6C-AD7E-2F3A4B5C6D7E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B3C6D2E-4F5A-5B6C-AD7E-2F3A4B5C6D7E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

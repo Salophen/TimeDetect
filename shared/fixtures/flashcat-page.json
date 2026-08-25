@@ -1,0 +1,23 @@
+{
+  "page": {
+    "page_id": 6410630422455,
+    "name": "DeepSeek",
+    "custom_domain": "status.deepseek.com",
+    "components": [
+      { "component_id": "api-pro", "name": "DeepSeek V4 Pro API服务(API Service)", "status": "degraded" },
+      { "component_id": "api-flash", "name": "DeepSeek V4 Flash API服务(API Service)", "status": "operational" },
+      { "component_id": "chat-instant", "section_id": "chat", "name": "快速模式(Instant Mode)", "status": "partial_outage" },
+      { "component_id": "chat-search", "section_id": "chat", "name": "搜索服务(Search Service)", "status": "operational" }
+    ],
+    "sections": [ { "section_id": "chat", "name": "对话服务(Chat Service)" } ]
+  },
+  "active_changes": [
+    {
+      "change_id": 123,
+      "title": "API degraded",
+      "status": "investigating",
+      "type": "incident",
+      "affected_components": [ { "component_id": "api-pro", "name": "API Service", "status": "full_outage" } ]
+    }
+  ]
+}

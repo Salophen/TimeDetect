@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Build Windows package
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Test
+        run: dotnet test windows/TimeDetect.Windows.sln --configuration Release
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish windows/src/TimeDetect.Windows/TimeDetect.Windows.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output windows-release `
+            -p:PublishSingleFile=true `
+            -p:EnableCompressionInSingleFile=false `
+            -p:IncludeNativeLibrariesForSelfExtract=false
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath "$pwd/windows-release/TimeDetect.exe" -PassThru
+          Start-Sleep -Seconds 5
+          if ($process.HasExited -and $process.ExitCode -ne 0) {
+            throw "TimeDetect.exe exited with code $($process.ExitCode)"
+          }
+          if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Compress-Archive -Path windows-release/TimeDetect.exe, windows-release/*_cor3.dll `
+            -DestinationPath release-assets/TimeDetect-windows-x64.zip
+          $hash = (Get-FileHash release-assets/TimeDetect-windows-x64.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  TimeDetect-windows-x64.zip" `
+            | Set-Content release-assets/TimeDetect-windows-x64.zip.sha256
+
+      - name: Upload Windows assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-assets
+          path: release-assets/*
+
+  macos:
+    name: Build macOS package
+    runs-on: macos-14
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Test
+        run: chmod +x macos/Scripts/test.sh && macos/Scripts/test.sh
+
+      - name: Build universal app
+        run: |
+          chmod +x macos/Scripts/build.sh
+          TIMEDETECT_VERSION="${GITHUB_REF_NAME#v}" macos/Scripts/build.sh
+
+      - name: Verify universal app
+        run: |
+          file macos/TimeDetect.app/Contents/MacOS/TimeDetect
+          codesign --verify --deep --strict macos/TimeDetect.app
+          open macos/TimeDetect.app
+          sleep 5
+          pgrep -x TimeDetect
+          pkill -x TimeDetect || true
+
+      - name: Package
+        run: |
+          mkdir -p release-assets
+          ditto -c -k --sequesterRsrc --keepParent macos/TimeDetect.app \
+            release-assets/TimeDetect-macos-universal.zip
+          cd release-assets
+          shasum -a 256 TimeDetect-macos-universal.zip \
+            > TimeDetect-macos-universal.zip.sha256
+
+      - name: Upload macOS assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-assets
+          path: release-assets/*
+
+  release:
+    name: Create GitHub Release
+    needs: [windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows assets
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-assets
+          path: release-assets
+
+      - name: Download macOS assets
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-assets
+          path: release-assets
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "TimeDetect $GITHUB_REF_NAME" \
+            --generate-notes
